@@ -73,15 +73,11 @@ object LogisticRegression {
         columnsToIgnore,
         maxFeaturesOption)
 
-      rawPoints.data.persist()
       val points = rawPoints.withoutConstantFeatures
       val numRemovedFeatures = rawPoints.featureNames.size - points.featureNames.size
       if (numRemovedFeatures > 0) {
         Common.progress("Dropped %,d constant features.".format(numRemovedFeatures))
       }
-
-      points.data.persist()
-      rawPoints.data.unpersist()
 
       Common.progress("Loaded %,d x %,d matrix into %,d partitions.".format(
         points.data.count(),
@@ -101,14 +97,16 @@ object LogisticRegression {
         .setRegParam(args.regParam)
 
       Common.progress("Training model.")
-      val model = algorithm.run(points.data)
+      val model = algorithm.run(points.data.cache())
       Common.progress("Done training model.")
 
       println("MODEL WEIGHTS: ")
-      (0 until points.featureNames.size).sortBy(i => model.weights(i) * -1).filter(i => model.weights(i) > 0).foreach(i => {
+      (0 until points.featureNames.size).sortBy(i => math.abs(model.weights(i)) * -1).filter(i => model.weights(i) != 0.0).foreach(i => {
         println(" [%10d] %20s = %.15f".format(i, points.featureNames(i), model.weights(i)))
       })
-      println("END (features not listed have 0 weight)")
+      val numZeroFeatures = model.weights.toArray.count(_ == 0.0)
+      println("Remaining %,d / %,d = %,f%% features have 0 weight.".format(
+        numZeroFeatures, model.weights.size, numZeroFeatures * 100.0 / model.weights.size))
     }
   }
 }
