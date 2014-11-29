@@ -1,0 +1,78 @@
+#! /bin/bash
+# Convenience script for users of Mount Sinai's demeter cluster.
+# Run from the root of a sparkbox checkout. Executes the most recently modified sparkbox jar with arguments for running on demeter with yarn.
+#
+# If $SPARKBOX_JAR is defined, then will execute that jar.
+#
+# Example invocation:
+#
+# sparkbox-hammerlab-demeter-cluster logistic-regression \
+# 	--input hdfs://demeter-nn1/user/.../data.csv \
+#
+set -e
+set -x
+
+# Log this run.
+echo "$@" >> ~/.sparkbox.invocations.log
+
+# We need to know the directory our script lives in so we can give a path to certain files. This chunk of code finds that.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+# Set jar, and log4j_properties.
+if [ -z "${SPARKBOX_JAR}" ]; then
+    jar="$(ls -tc target/sparkbox-?.*.jar | head -n 1)"
+    echo "Using most recently modified jar: $jar"
+else
+    jar="${SPARKBOX_JAR}"
+    echo "Using SPARKBOX_JAR=$jar"
+fi
+
+if [ -z "${SPARKBOX_LOG4J_PROPERTIES}" ]; then
+    log4j_properties="file://$DIR/log4j.properties"
+else
+    log4j_properties="${SPARKBOX_LOG4J_PROPERTIES}"
+fi
+echo "Using log4j properties: $log4j_properties"
+
+# Function to get the absolute path of a file:
+abspath () { case "$1" in /*)printf "%s\n" "$1";; *)printf "%s\n" "$PWD/$1";; esac; }
+jar_abs="$(abspath "$jar")"
+
+spark_home=
+if [ ! -z "$SPARK_HOME" ]; then
+	spark_home="$SPARK_HOME"
+elif [ ! -z "$SPARK" ]; then
+	spark_home="$SPARK"
+else
+	spark_home=/opt/cloudera/parcels/CDH
+fi
+
+export YARN_CONF_DIR=/etc/hadoop/conf
+
+if [ -z "$SPARK_MASTER" ]; then
+    SPARK_MASTER="yarn"
+fi    
+exec time "$spark_home"/bin/spark-submit \
+	--master "$SPARK_MASTER" \
+	--deploy-mode client \
+	--executor-memory 10g \
+	--driver-memory 10g \
+	--num-executors 1000 \
+	--executor-cores 4 \
+	--conf spark.yarn.executor.memoryOverhead=1024 \
+	--conf spark.app.name=Sparkbox \
+	--conf spark.core.connection.ack.wait.timeout=600 \
+	--conf spark.file.transferTo=false \
+	--conf spark.shuffle.manager=sort \
+	--driver-java-options -Dlog4j.configuration="$log4j_properties" \
+	--class org.bdgenomics.sparkbox.Sparkbox \
+	--verbose \
+	"$jar_abs" \
+	"$@"
+
