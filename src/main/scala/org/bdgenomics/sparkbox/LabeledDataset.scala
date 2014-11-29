@@ -70,8 +70,8 @@ object LabeledDataset extends Logging {
                   maxColumns: Option[Int] = None): LabeledDataset = {
     // Is there a more efficient way to do this?
     val rdd = sc.textFile(filePath).mapPartitions(lines => {
-      val parser = new CSVParser()
-      lines.map(parser.parseLine(_).toIndexedSeq)
+      val parser = new CSVParser(',', '"', '\\', false, true)
+      lines.map(parser.parseLine(_).map(_.trim).toIndexedSeq)
     })
     val allColumnNames: Seq[String] = rdd.first()
     if (allColumnNames.distinct.size < allColumnNames.size) {
