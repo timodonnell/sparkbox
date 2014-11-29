@@ -1,0 +1,29 @@
+#! /bin/bash
+# Executes the most recently modified sparkbox jar. Run this from the sparkbox root directory.
+#
+# If $SPARKBOX_JAR is defined, then will execute that jar. 
+#
+echo "$@" >> ~/.sparkbox.invocations.log
+
+if [ -z "${SPARKBOX_JAR}" ]; then
+    jar=$(ls -tc target/sparkbox-?.*.jar | head -n 1)
+    if [ -z "$jar" ]; then
+        echo "Couldn't find a Sparkbox jar in the target/ directory."
+        echo "Are you in the root directory of the Sparkbox repo, and have you built Sparkbox?"
+        echo "To build, run: "
+        echo "    mvn package -DskipTests=true"
+        exit 1
+    fi
+    echo "Using most recently modified jar: $jar"
+else
+    jar=${SPARKBOX_JAR}
+    echo "Using SPARKBOX_JAR=$jar"
+fi
+
+exec time java \
+    -Xmx4g \
+    -XX:MaxPermSize=512m \
+    "-Dspark.master=local[1]" \
+    -cp $jar \
+    org.bdgenomics.sparkbox.Sparkbox "$@"
+
