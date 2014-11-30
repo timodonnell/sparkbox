@@ -21,13 +21,17 @@ case class LabeledDataset(featureNames: Seq[String],
   /** Map from column name to column index. */
   lazy val featureIndices = featureNames.zipWithIndex.toMap
 
+  def transformData(function: RDD[LabeledPoint] => RDD[LabeledPoint]): LabeledDataset = {
+    LabeledDataset(featureNames, function(data))
+  }
+
   /** Return a new instance with only the given features. */
   def project(newFeatures: Seq[String]): LabeledDataset = {
-    projectIndices(newFeatures.map(featureIndices))
+    projectByIndices(newFeatures.map(featureIndices))
   }
 
   /** Return a new instance with only the given features (specified by their index). */
-  def projectIndices(newFeatureIndices: Seq[Int]): LabeledDataset = {
+  def projectByIndices(newFeatureIndices: Seq[Int]): LabeledDataset = {
     val newFeatureNames = newFeatureIndices.map(featureNames)
     if (newFeatureNames == featureNames) {
       this
@@ -48,7 +52,7 @@ case class LabeledDataset(featureNames: Seq[String],
         case _ => None
       })
     }).zipWithIndex.filter(_._1.isEmpty).map(_._2).toSeq
-    projectIndices(featureIndicesToKeep)
+    projectByIndices(featureIndicesToKeep)
   }
 
 }
