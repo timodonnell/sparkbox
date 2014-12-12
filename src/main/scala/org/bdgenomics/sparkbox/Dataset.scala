@@ -1,11 +1,10 @@
 package org.bdgenomics.sparkbox
 
 import au.com.bytecode.opencsv.CSVParser
+import org.kohsuke.args4j.{ Option => Opt }
 
-import scala.collection.mutable.{ ArrayBuffer, ArrayBuilder }
 import org.apache.spark.{ Logging, SparkContext }
 import org.apache.spark.mllib.linalg
-import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
 
@@ -15,23 +14,23 @@ import org.apache.spark.rdd.RDD
  * @param featureNames a name for each column in the matrix
  * @param data the matrix
  */
-case class LabeledDataset(featureNames: Seq[String],
-                          data: RDD[LabeledPoint]) {
+case class Dataset(featureNames: Seq[String],
+                   data: RDD[LabeledPoint]) {
 
   /** Map from column name to column index. */
   lazy val featureIndices = featureNames.zipWithIndex.toMap
 
-  def transformData(function: RDD[LabeledPoint] => RDD[LabeledPoint]): LabeledDataset = {
-    LabeledDataset(featureNames, function(data))
+  def transformData(function: RDD[LabeledPoint] => RDD[LabeledPoint]): Dataset = {
+    Dataset(featureNames, function(data))
   }
 
   /** Return a new instance with only the given features. */
-  def project(newFeatures: Seq[String]): LabeledDataset = {
+  def project(newFeatures: Seq[String]): Dataset = {
     projectByIndices(newFeatures.map(featureIndices))
   }
 
   /** Return a new instance with only the given features (specified by their index). */
-  def projectByIndices(newFeatureIndices: Seq[Int]): LabeledDataset = {
+  def projectByIndices(newFeatureIndices: Seq[Int]): Dataset = {
     val newFeatureNames = newFeatureIndices.map(featureNames)
     if (newFeatureNames == featureNames) {
       this
@@ -39,12 +38,12 @@ case class LabeledDataset(featureNames: Seq[String],
       val newData = data.map(point => {
         LabeledPoint(point.label, new linalg.DenseVector(newFeatureIndices.map(point.features.apply).toArray))
       })
-      LabeledDataset(newFeatureNames, newData)
+      Dataset(newFeatureNames, newData)
     }
   }
 
   /** Return a new instance including only those features that have at least two distinct values. */
-  def withoutConstantFeatures(): LabeledDataset = {
+  def withoutConstantFeatures(): Dataset = {
     // For each feature we keep Some(value) if we've only seen one value so far, otherwise None
     val featureIndicesToKeep = data.map(_.features.toArray.map(Some(_): Option[Double])).reduce((array1, array2) => {
       array1.zip(array2).map({
@@ -54,9 +53,22 @@ case class LabeledDataset(featureNames: Seq[String],
     }).zipWithIndex.filter(_._1.isEmpty).map(_._2).toSeq
     projectByIndices(featureIndicesToKeep)
   }
-
 }
-object LabeledDataset extends Logging {
+object Dataset extends Logging {
+  trait ReadArguments extends Common.Arguments.Base {
+    @Opt(name = "--input", metaVar = "X", usage = "Input data in csv", required = true)
+    var input: String = ""
+
+    @Opt(name = "--max-features", metaVar = "X", usage = "Use only the first X features")
+    var maxFeatures: Int = 0
+
+    @Opt(name = "--ignore", metaVar = "X", usage = "Comma separated list of field names to ignore")
+    var ignore: String = ""
+
+    @Opt(name = "--target", metaVar = "X", usage = "Target column name if training")
+    var target: String = "Y"
+  }
+
   /**
    * Load from CSV file.
    *
@@ -65,13 +77,13 @@ object LabeledDataset extends Logging {
    * @param labelColumnName column name of the label column. If None, all points will have 0.0 as their label.
    * @param ignoreColumns names of columns to exclude from the result
    * @param maxColumns use only this many feature columns (i.e. exclude all but the first N)
-   * @return LabeledDataset instance
+   * @return Dataset instance
    */
   def readFromCSV(sc: SparkContext,
                   filePath: String,
                   labelColumnName: Option[String] = None,
                   ignoreColumns: Set[String] = Set.empty,
-                  maxColumns: Option[Int] = None): LabeledDataset = {
+                  maxColumns: Option[Int] = None): Dataset = {
     // Is there a more efficient way to do this?
     val rdd = sc.textFile(filePath).mapPartitions(lines => {
       val parser = new CSVParser(',', '"', '\\', false, true)
@@ -102,7 +114,19 @@ object LabeledDataset extends Logging {
       val features = featureColumnIndices.map(i => asNumerical(row(i)))
       LabeledPoint(label, new linalg.DenseVector(features.toArray))
     })
-    LabeledDataset(featureColumnNames, points)
+    Dataset(featureColumnNames, points)
+  }
+
+  def fromArguments(sc: SparkContext, args: ReadArguments): Dataset = {
+    val columnsToIgnore = args.ignore.split(",").map(_.trim).filter(_.nonEmpty).toSet
+    val maxFeaturesOption = if (args.maxFeatures == 0) None else Some(args.maxFeatures)
+    val target = if (args.target.isEmpty) None else Some(args.target)
+    val points = Dataset.readFromCSV(sc, args.input, target, columnsToIgnore, maxFeaturesOption)
+    Common.progress("Loaded %,d x %,d matrix into %,d partitions.".format(
+      points.data.count(),
+      points.featureNames.size,
+      points.data.partitions.length))
+    points
   }
 
   /**

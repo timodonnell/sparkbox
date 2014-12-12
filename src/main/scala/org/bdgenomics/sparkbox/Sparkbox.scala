@@ -32,7 +32,8 @@ object Sparkbox extends Logging {
    * Commands that are part of Sparkbox. If you add a new one, update this list.
    */
   private val commands: Seq[Command[_]] = List(
-    LogisticRegression.Command
+    TrainLinear.Command,
+    PredictLinear.Command
   )
 
   private def printUsage() = {
@@ -63,6 +64,9 @@ object Sparkbox extends Logging {
         Logger.getLogger("org.eclipse.jetty").setLevel(Level.WARN)
         Logger.getLogger("spark").setLevel(Level.WARN)
         Logger.getLogger("parquet.hadoop").setLevel(Level.FATAL)
+
+        Provenance.setArguments(args) // remember our commandline arguments when writing out provenance
+
         command.run(args.drop(1))
       }
       case None => {

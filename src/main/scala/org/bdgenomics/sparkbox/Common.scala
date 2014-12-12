@@ -18,7 +18,10 @@
 
 package org.bdgenomics.sparkbox
 
+import java.net.InetAddress
 import java.util.Calendar
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.mllib.classification.LogisticRegressionModel
 import org.apache.spark.{ Logging, SparkConf, SparkContext }
 import org.kohsuke.args4j.{ Option => Opt }
 
@@ -51,6 +54,10 @@ object Common extends Logging {
         }
         a :+ (kvSplit(0), kvSplit(1))
     }
+  }
+
+  lazy val hadoopConfiguration: Configuration = {
+    new Configuration
   }
 
   /**

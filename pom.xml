@@ -9,11 +9,12 @@
   <name>sparkbox: tools that use Spark's MLLib</name>
 
   <properties>
-    <java.version>1.8</java.version>
+    <java.version>1.7</java.version>
     <scala.version>2.10.3</scala.version>
     <scala.version.prefix>2.10</scala.version.prefix>
     <hadoop.version>2.3.0</hadoop.version>
     <spark.version>1.1.0</spark.version>
+    <avro.version>1.7.7</avro.version>
     <scoverage-plugin.version>0.99.11</scoverage-plugin.version>
     <maven.plugin.scoverage.version>0.99.10</maven.plugin.scoverage.version>
   </properties>
@@ -162,6 +163,24 @@
           <skipTests>true</skipTests>
         </configuration>
       </plugin>
+
+      <!-- Avro -->
+      <plugin>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro-maven-plugin</artifactId>
+        <version>${avro.version}</version>
+        <executions>
+          <execution>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>protocol</goal>
+              <goal>idl-protocol</goal>
+              <goal>schema</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
       <!-- enable scalatest -->
       <plugin>
         <groupId>org.scalatest</groupId>
@@ -287,6 +306,11 @@
       <artifactId>scalac-scoverage-plugin_${scala.version.prefix}</artifactId>
       <version>${scoverage-plugin.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
+    </dependency>
   </dependencies>
 
   <profiles>
@@ -329,6 +353,14 @@
                   <version>${scoverage-plugin.version}</version>
                 </compilerPlugin>
               </compilerPlugins>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <source>${java.version}</source>
+              <target>${java.version}</target>
             </configuration>
           </plugin>
         </plugins>

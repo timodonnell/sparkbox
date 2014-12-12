@@ -4,6 +4,9 @@ sparkbox
 Commandline frontends to some [Apache Spark](http://spark.incubator.apache.org/)
 [MLlib](https://spark.apache.org/mllib/MLlib) machine learning routines. Very little functionality currently.
 
+BEWARE: this currently does not center and scale features when training, which
+makes the SGD optimization perform very poorly. This is really not usable yet.
+
 # Local example
 
 Build:
@@ -12,10 +15,22 @@ Build:
 mvn package
 ```
 
-Run:
+To see available commands, run:
 
 ```
-scripts/sparkbox logistic-regression --input src/test/resources/example1.csv
+scripts/sparkbox
+```
+
+For example:
+
+```
+scripts/sparkbox train-linear --input src/test/resources/example1.csv --out model.avro
+```
+
+then:
+
+```
+scripts/sparkbox predict-linear --input src/test/resources/example1.csv --model model.avro --out results.csv
 ```
 
 # Cluster example
